@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/poojabhather99/meal-nutrition-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/poojabhather99/meal-nutrition-agent/actions/workflows/ci.yml)
 
+**Live demo (runs in your browser):** https://poojabhather99.github.io/meal-nutrition-agent/
+
 A single-user meal planning agent in the shape of a "nutritionist friend": you tell it about yourself in plain language, it keeps a small evolving profile, plans the week around a protein target, and reminds you the evening before what to prepare or order.
 
 The planner, profile parser, reminders and command router are plain Python with no dependencies, so the whole thing is testable without a Telegram token, an LLM or a network. A Telegram adapter only needs to call `Bot.handle(chat_id, text)` and send back the string.

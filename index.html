@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meal Nutrition Agent demo</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Chat with the bot's command router. Tell it about yourself in plain language, then ask for a plan, a reminder or a shopping list.">
+<style>
+:root{--bg:#fafaf8;--fg:#1c1c1a;--mut:#6b6b66;--card:#fff;--line:#e3e2dc;--acc:#1f6f5c;--accfg:#fff;--bad:#a8321f;--ok:#1f6f5c;--code:#f2f1ec}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#ecebe5;--mut:#a09f98;--card:#1d1d1b;--line:#33332f;--acc:#4cb89d;--accfg:#10201b;--bad:#ef8a75;--ok:#4cb89d;--code:#242421}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:28px 16px 64px}
+h1{font-size:1.7rem;margin:0 0 6px}
+h2{font-size:1.05rem;margin:28px 0 10px}
+p.lead{color:var(--mut);margin:0 0 14px}
+a{color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
+label{display:block;font-size:.85rem;color:var(--mut);margin:10px 0 4px}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{min-height:110px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem}
+button{background:var(--acc);color:var(--accfg);border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer;margin:8px 8px 0 0}
+button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+button:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 180px}
+pre{background:var(--code);padding:10px 12px;border-radius:8px;overflow:auto;font-size:.82rem;white-space:pre-wrap;word-break:break-word;margin:6px 0}
+table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
+.tag{margin-left:8px;display:inline-block;padding:1px 8px;border-radius:99px;font-size:.78rem;border:1px solid var(--line)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}
+#status{font-size:.9rem;color:var(--mut);margin:8px 0}
+.bubble{padding:8px 12px;border-radius:12px;margin:6px 0;max-width:92%;white-space:pre-wrap;border:1px solid var(--line)}
+.me{margin-left:auto;background:var(--acc);color:var(--accfg);border-color:var(--acc)}
+footer{margin-top:36px;color:var(--mut);font-size:.88rem}
+</style>
+</head>
+<body>
+<main>
+<h1>Meal planning bot</h1>
+<p class="lead">Chat with the bot's command router. Tell it about yourself in plain language, then ask for a plan, a reminder or a shopping list.</p>
+<p class="mut" style="font-size:.9rem">This page runs the project's actual Python source in your browser (via Pyodide). Nothing is sent to a server. <a href="https://github.com/poojabhather99/meal-nutrition-agent">View the code on GitHub</a>.</p>
+<div id="status">Loading Python (first visit can take 10 to 20 seconds)...</div>
+<div id="app" hidden>
+
+<div class="card">
+<div id="chat" style="max-height:460px;overflow:auto"></div>
+<div class="row" style="margin-top:8px"><input id="msg" placeholder="e.g. I am eggetarian, 62 kg, want to gain muscle, I hate okra" style="flex:3 1 260px"><button id="send" style="flex:0 0 auto">Send</button></div>
+<div id="chips"></div>
+</div>
+
+</div>
+<footer>Nutrition numbers come from a small hand-entered table and are approximate. This is meal-planning help, not medical or dietetic advice. There is no language model behind it; the profile parser understands a fixed set of phrasings.</footer>
+</main>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+const FILES = ["src/mealagent/__init__.py", "src/mealagent/foods.py", "src/mealagent/profile.py", "src/mealagent/planner.py", "src/mealagent/reminders.py", "src/mealagent/bot.py"];
+const PACKAGES = [];
+const PY = String.raw`
+from datetime import date
+from mealagent.bot import Bot
+bot = Bot()
+def send(text):
+    import json
+    return json.dumps(bot.handle(1, text))
+`;
+const $ = (id) => document.getElementById(id);
+const el = (tag, text, cls) => { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; };
+let py;
+async function boot() {
+  try {
+    py = await loadPyodide();
+    if (PACKAGES.length) { $('status').textContent = 'Loading ' + PACKAGES.join(', ') + '...'; await py.loadPackage(PACKAGES); }
+    const base = new URL('.', location.href).href;
+    for (const f of FILES) {
+      const r = await fetch(base + f);
+      if (!r.ok) throw new Error('could not load ' + f + ' (' + r.status + ')');
+      py.FS.mkdirTree('/app/' + f.split('/').slice(0, -1).join('/'));
+      py.FS.writeFile('/app/' + f, await r.text());
+    }
+    py.runPython("import sys; sys.path.insert(0, '/app/src')");
+    py.runPython(PY);
+    $('status').remove(); $('app').hidden = false;
+    init();
+  } catch (e) { $('status').textContent = 'Could not start the demo: ' + e.message; $('status').className = 'bad'; }
+}
+const call = (fn, ...args) => JSON.parse(py.globals.get(fn)(...args));
+
+function say(text, me) { const b = el('div', text, 'bubble' + (me ? ' me' : '')); $('chat').append(b); $('chat').scrollTop = 1e6; }
+function send(t) { t = t.trim(); if (!t) return; say(t, true); say(call('send', t)); $('msg').value = ''; }
+function init() {
+  ['I am eggetarian, 62 kg, want to gain muscle, I hate okra', '/plan', '/today', '/remind', '/shopping', '/profile', '/help'].forEach((t) => {
+    const b = el('button', t.length > 24 ? t.slice(0, 22) + '...' : t, 'alt'); b.onclick = () => send(t); $('chips').append(b);
+  });
+  $('send').onclick = () => send($('msg').value);
+  $('msg').onkeydown = (e) => { if (e.key === 'Enter') send($('msg').value); };
+  say('Hi! Tell me about your diet, weight and goal, then send /plan. Type /help for commands.');
+}
+
+boot();
+</script>
+</body>
+</html>
